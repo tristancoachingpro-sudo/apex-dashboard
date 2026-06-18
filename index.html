@@ -1,1 +1,437 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#07070d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="APEX" />
+  <title>APEX</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="main.css" />
+</head>
+<body>
+<div id="app">
 
+<!-- Auth Screen -->
+<div id="auth-screen" style="position:fixed;inset:0;background:#07070d;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10000;padding:32px">
+  <div style="text-align:center;margin-bottom:48px">
+    <div style="font-size:48px;font-weight:900;letter-spacing:8px;color:#fff;margin-bottom:8px">APEX</div>
+    <div style="font-size:12px;color:#555;letter-spacing:4px">PERSONAL DASHBOARD</div>
+  </div>
+  <div id="auth-error" style="display:none;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.3);border-radius:12px;padding:12px 16px;font-size:13px;color:#ff5050;margin-bottom:20px;text-align:center;max-width:280px"></div>
+  <button id="auth-google-btn" onclick="Auth.signInWithGoogle().catch(e => { const el = document.getElementById('auth-error'); el.textContent = 'Erreur de connexion. Réessaie.'; el.style.display='block'; })"
+    style="display:flex;align-items:center;gap:12px;background:#fff;color:#333;border:none;border-radius:16px;padding:16px 28px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,0.4);transition:transform 0.15s">
+    <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.7 2.4 30.2 0 24 0 14.7 0 6.7 5.5 2.9 13.5l7.8 6C12.5 13.1 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.1-4.5 6.7l7 5.4c4.1-3.8 6.5-9.4 6.5-16.1z"/><path fill="#FBBC05" d="M10.7 28.5c-.5-1.5-.8-3-.8-4.5s.3-3 .8-4.5l-7.8-6C1.1 16.6 0 20.2 0 24s1.1 7.4 2.9 10.5l7.8-6z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7-5.4c-2 1.3-4.6 2.1-8.2 2.1-6.2 0-11.5-4.1-13.3-9.7l-7.8 6C6.7 42.5 14.7 48 24 48z"/></svg>
+    Se connecter avec Google
+  </button>
+  <p style="font-size:11px;color:#333;margin-top:32px;text-align:center;max-width:260px;line-height:1.6">Tes données sont chiffrées et accessibles uniquement avec ton compte Google</p>
+</div>
+
+  <!-- Splash -->
+  <div id="splash">
+    <div class="splash-content">
+      <div class="splash-logo">
+        <span class="splash-letter" style="--i:0">A</span><span class="splash-letter" style="--i:1">P</span><span class="splash-letter" style="--i:2">E</span><span class="splash-letter" style="--i:3">X</span>
+      </div>
+      <div class="splash-sub">PERSONAL DASHBOARD</div>
+      <div class="splash-line"></div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div id="main" class="hidden">
+
+    <!-- Pages wrapper (swipeable) -->
+    <div id="pages-wrapper">
+
+      <!-- PAGE: Home -->
+      <div id="page-home" class="page active" data-index="0">
+        <div class="page-scroll">
+          <div class="home-header">
+            <div>
+              <div class="greeting" id="greeting-text">Bonjour</div>
+              <div class="date-today" id="date-today"></div>
+              <div class="home-score-badge" id="home-mood-avg" style="display:none;margin-top:6px">
+                🧠 Humeur 7j : <span class="hcs-val">—</span>
+              </div>
+            </div>
+            <div class="home-month-badge" id="month-revenue">+0€ ce mois</div>
+          </div>
+          <div class="workout-hero">
+            <div class="workout-hero-label">ENTRAÎNEMENT DU JOUR</div>
+            <div class="workout-hero-name" id="home-workout-name">—</div>
+            <div class="week-strip" id="home-week-strip"></div>
+          </div>
+          <!-- Financial Goal Bar -->
+          <div class="fin-goal-card" id="fin-goal-card" style="display:none" onclick="App.goToBusiness('finances')">
+            <div class="fgc-top">
+              <div class="fgc-label" id="fgc-label">Objectif du mois</div>
+              <div class="fgc-amounts">
+                <span class="fgc-current" id="fgc-current">0€</span>
+                <span class="fgc-sep">/</span>
+                <span class="fgc-target" id="fgc-target">0€</span>
+              </div>
+            </div>
+            <div class="fgc-track">
+              <div class="fgc-fill" id="fgc-fill"></div>
+              <div class="fgc-glow" id="fgc-glow"></div>
+            </div>
+            <div class="fgc-bottom">
+              <span class="fgc-pct" id="fgc-pct">0%</span>
+              <span class="fgc-remaining" id="fgc-remaining"></span>
+            </div>
+          </div>
+
+          <div class="home-grid">
+            <div class="home-card card-accent-blue" onclick="App.goTo('medocs')">
+              <div class="hc-icon">💊</div>
+              <div class="hc-info">
+                <div class="hc-title">Médicaments</div>
+                <div class="hc-sub" id="hc-medocs-sub">Aucun configuré</div>
+              </div>
+              <div class="hc-badge" id="hc-medocs-badge">0/0</div>
+              <div class="hc-progress-track"><div class="hc-progress-fill" id="hc-medocs-bar" style="width:0%;background:var(--accent-crystal)"></div></div>
+            </div>
+            <div class="home-card card-accent-gold" onclick="App.goToBusiness('orders')">
+              <div class="hc-icon">📦</div>
+              <div class="hc-info">
+                <div class="hc-title">Commandes</div>
+                <div class="hc-sub" id="hc-orders-sub">Aucune en cours</div>
+              </div>
+              <div class="hc-badge hc-badge-gold" id="hc-orders-badge">0</div>
+              <div class="hc-progress-track"><div class="hc-progress-fill" id="hc-orders-bar" style="width:0%;background:var(--accent-gold)"></div></div>
+            </div>
+            <div class="home-card card-accent-green" onclick="App.goToBusiness('finances')">
+              <div class="hc-icon">💰</div>
+              <div class="hc-info">
+                <div class="hc-title">Finances</div>
+                <div class="hc-sub">Ce mois</div>
+              </div>
+              <div class="hc-badge hc-badge-green" id="hc-finances-badge">+0€</div>
+              <div class="hc-progress-track"><div class="hc-progress-fill" id="hc-finances-bar" style="width:0%;background:var(--accent-green)"></div></div>
+            </div>
+            <div class="home-card card-accent-purple" onclick="App.goToBusiness('todos')">
+              <div class="hc-icon">✅</div>
+              <div class="hc-info">
+                <div class="hc-title">Tâches</div>
+                <div class="hc-sub" id="hc-todos-sub">À jour</div>
+              </div>
+              <div class="hc-badge hc-badge-purple" id="hc-todos-badge">0</div>
+              <div class="hc-progress-track"><div class="hc-progress-fill" id="hc-todos-bar" style="width:0%;background:var(--accent-crystal)"></div></div>
+            </div>
+          </div>
+          <div class="home-recap-btn" id="home-recap-btn" style="display:none">
+            <button class="btn-cta" style="width:100%;margin-bottom:12px" onclick="App.goTo('divers');setTimeout(()=>Divers.openRecap(),200)">
+              📊 Voir le récap de la semaine
+            </button>
+          </div>
+          <div class="home-mood-cta" id="home-mood-cta">
+            <div class="mood-cta-text">
+              <div class="mood-cta-title">Journaling du soir</div>
+              <div class="mood-cta-sub">Prends 2 min pour noter ta journée</div>
+            </div>
+            <button class="btn-cta" onclick="Mood.openEntry()">Commencer →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: Workout -->
+      <div id="page-workout" class="page" data-index="1">
+        <div class="page-scroll">
+          <div class="page-header"><h1>Workout</h1></div>
+          <div class="week-program" id="week-program"></div>
+          <div id="workout-log-list"></div>
+        </div>
+      </div>
+
+      <!-- PAGE: Médocs -->
+      <div id="page-medocs" class="page" data-index="2">
+        <div class="page-scroll">
+          <div class="page-header">
+            <h1>Médocs & Stéros</h1>
+            <button class="btn-primary" onclick="Medocs.openAdd()">+ Ajouter</button>
+          </div>
+          <div class="medoc-calendar" id="medoc-calendar"></div>
+          <div class="medoc-list" id="medoc-list"></div>
+        </div>
+      </div>
+
+      <!-- PAGE: Business -->
+      <div id="page-business" class="page" data-index="3">
+        <div id="biz-hub" class="biz-screen active">
+          <div class="page-scroll">
+            <div class="page-header"><h1>Business</h1></div>
+            <div class="biz-hub-grid">
+              <div class="biz-hub-card" onclick="App.goToBusiness('orders')">
+                <span class="bhc-badge bhc-badge--gold" id="hub-badge-orders" style="display:none">0</span>
+                <div class="bhc-icon">📦</div>
+                <div class="bhc-content">
+                  <div class="bhc-title">Commandes</div>
+                  <div class="bhc-sub" id="hub-orders-sub">Pipeline &amp; suivi</div>
+                </div>
+                <div class="bhc-arrow">›</div>
+              </div>
+              <div class="biz-hub-card" onclick="App.goToBusiness('catalogue')">
+                <div class="bhc-icon">🗂️</div>
+                <div class="bhc-content">
+                  <div class="bhc-title">Catalogue</div>
+                  <div class="bhc-sub" id="hub-catalogue-sub">Produits &amp; prix</div>
+                </div>
+                <div class="bhc-arrow">›</div>
+              </div>
+              <div class="biz-hub-card" onclick="App.goToBusiness('clients')">
+                <span class="bhc-badge" id="hub-badge-clients" style="display:none">0</span>
+                <div class="bhc-icon">👥</div>
+                <div class="bhc-content">
+                  <div class="bhc-title">Clients</div>
+                  <div class="bhc-sub" id="hub-clients-sub">Historique &amp; stats</div>
+                </div>
+                <div class="bhc-arrow">›</div>
+              </div>
+              <div class="biz-hub-card" onclick="App.goToBusiness('protocoles')">
+                <div class="bhc-icon">📋</div>
+                <div class="bhc-content">
+                  <div class="bhc-title">Protocoles</div>
+                  <div class="bhc-sub">Cycles &amp; dosages</div>
+                </div>
+                <div class="bhc-arrow">›</div>
+              </div>
+              <div class="biz-hub-card biz-hub-card--green" onclick="App.goToBusiness('finances')">
+                <div class="bhc-icon">💰</div>
+                <div class="bhc-content">
+                  <div class="bhc-title">Finances</div>
+                  <div class="bhc-sub" id="hub-finances-sub">Stats &amp; comptabilité</div>
+                </div>
+                <div class="bhc-arrow">›</div>
+              </div>
+              <div class="biz-hub-card" onclick="App.goToBusiness('tiktok')">
+                <div class="bhc-icon">📱</div>
+                <div class="bhc-content">
+                  <div class="bhc-title">TikTok</div>
+                  <div class="bhc-sub" id="hub-tiktok-sub">Stats & objectifs</div>
+                </div>
+                <div class="bhc-arrow">›</div>
+              </div>
+              <div class="biz-hub-card biz-hub-card--purple" onclick="App.goToBusiness('todos')">
+                <span class="bhc-badge bhc-badge--red" id="hub-badge-todos" style="display:none">0</span>
+                <div class="bhc-icon">✅</div>
+                <div class="bhc-content">
+                  <div class="bhc-title">Todos</div>
+                  <div class="bhc-sub" id="hub-todos-sub">Tâches en attente</div>
+                </div>
+                <div class="bhc-arrow">›</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="biz-orders" class="biz-screen">
+          <div class="biz-subheader" style="flex-wrap:wrap;height:auto;padding:10px 16px;gap:8px">
+            <div style="display:flex;align-items:center;gap:12px;width:100%">
+              <button class="biz-back-btn" onclick="App.businessBack()">‹ Business</button>
+              <h2 style="flex:1">Commandes</h2>
+              <button class="btn-primary" onclick="Orders.openNew()" style="font-size:13px;padding:8px 14px">+ Commande</button>
+            </div>
+            <div style="display:flex;gap:6px;width:100%">
+              <button class="btn-secondary" onclick="Orders.openCalendar()" style="flex:1;padding:7px;font-size:13px">📅 Calendrier</button>
+              <button class="btn-secondary" onclick="Orders.openArchive()" style="flex:1;padding:7px;font-size:13px">🗄️ Archives</button>
+              <button class="btn-secondary" onclick="Orders.openExpress()" style="flex:1;padding:7px;font-size:13px">⚡ Express</button>
+            </div>
+          </div>
+          <div class="biz-body">
+            <div id="orders-search-bar"></div>
+            <div class="pipeline-strip" id="pipeline-strip"></div>
+            <div id="orders-list"></div>
+          </div>
+        </div>
+        <div id="biz-catalogue" class="biz-screen">
+          <div class="biz-subheader">
+            <button class="biz-back-btn" onclick="App.businessBack()">‹ Business</button>
+            <h2>Catalogue</h2>
+            <button class="btn-primary" onclick="Catalogue.openAdd()">+ Produit</button>
+          </div>
+          <div class="biz-body">
+            <div class="catalogue-filters" id="catalogue-filters"></div>
+            <div id="catalogue-list"></div>
+          </div>
+        </div>
+        <div id="biz-clients" class="biz-screen">
+          <div class="biz-subheader">
+            <button class="biz-back-btn" onclick="App.businessBack()">‹ Business</button>
+            <h2>Clients</h2>
+            <button class="btn-primary" onclick="Clients.openAdd()">+ Client</button>
+          </div>
+          <div class="biz-body">
+            <div id="clients-list"></div>
+          </div>
+        </div>
+        <div id="biz-protocoles" class="biz-screen">
+          <div class="biz-subheader">
+            <button class="biz-back-btn" onclick="App.businessBack()">‹ Business</button>
+            <h2>Protocoles</h2>
+            <button class="btn-primary" onclick="Protocoles.openNew()">+ Protocole</button>
+          </div>
+          <div class="biz-body">
+            <div id="protocoles-list"></div>
+          </div>
+        </div>
+        <div id="biz-finances" class="biz-screen">
+          <div class="biz-subheader">
+            <button class="biz-back-btn" onclick="App.businessBack()">‹ Business</button>
+            <h2>Finances</h2>
+          </div>
+          <div class="biz-body">
+            <div id="finances-content"></div>
+          </div>
+        </div>
+        <div id="biz-tiktok" class="biz-screen">
+          <div class="biz-subheader">
+            <button class="biz-back-btn" onclick="App.businessBack()">‹ Business</button>
+            <h2>TikTok</h2>
+          </div>
+          <div class="biz-body" id="tiktok-body"></div>
+        </div>
+        <div id="biz-todos" class="biz-screen">
+          <div class="biz-subheader">
+            <button class="biz-back-btn" onclick="App.businessBack()">‹ Business</button>
+            <h2>Todos</h2>
+            <button class="btn-primary" onclick="Todos.openAdd()">+ Tâche</button>
+          </div>
+          <div class="biz-body">
+            <div id="todos-content"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: Divers -->
+      <div id="page-divers" class="page" data-index="4">
+        <div class="page-scroll">
+          <div class="page-header"><h1>Divers</h1></div>
+          <div class="divers-grid">
+            <div class="divers-card" onclick="Divers.openMood()">
+              <div class="dc-icon">🧠</div>
+              <div class="dc-title">Mood</div>
+              <div class="dc-sub">Journal & stats</div>
+            </div>
+            <div class="divers-card" onclick="Divers.openProgram()">
+              <div class="dc-icon">📅</div>
+              <div class="dc-title">Programme</div>
+              <div class="dc-sub">Planning hebdo</div>
+            </div>
+            <div class="divers-card" onclick="Divers.openWeight()">
+              <div class="dc-icon">⚖️</div>
+              <div class="dc-title">Poids</div>
+              <div class="dc-sub">Suivi & courbe</div>
+            </div>
+            <div class="divers-card" onclick="Divers.openRecap()">
+              <div class="dc-icon">📊</div>
+              <div class="dc-title">Récap</div>
+              <div class="dc-sub">Bilan semaine</div>
+            </div>
+            <div class="divers-card" onclick="Divers.openVault()">
+              <div class="dc-icon">🔐</div>
+              <div class="dc-title">Vault</div>
+              <div class="dc-sub">Coffre sécurisé</div>
+            </div>
+            <div class="divers-card" onclick="Divers.openNotifs()">
+              <div class="dc-icon">🔔</div>
+              <div class="dc-title">Notifications</div>
+              <div class="dc-sub" id="notif-divers-sub">Configurer</div>
+            </div>
+            <div class="divers-card" onclick="Divers.openSettings()">
+              <div class="dc-icon">⚙️</div>
+              <div class="dc-title">Réglages</div>
+              <div class="dc-sub">Paramètres</div>
+            </div>
+          </div>
+          <div id="divers-sub-content"></div>
+        </div>
+      </div>
+
+    </div><!-- /pages-wrapper -->
+
+    <!-- Bottom Nav -->
+    <nav id="bottomnav">
+      <div class="bnav-indicator" id="bnav-indicator"></div>
+      <button class="bnav-tab active" data-tab="home" data-index="0" onclick="App.goTo('home')">
+        <div class="bnav-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <span class="bnav-label">Accueil</span>
+      </button>
+      <button class="bnav-tab" data-tab="workout" data-index="1" onclick="App.goTo('workout')">
+        <div class="bnav-icon">
+          <svg viewBox="0 0 24 24"><path d="M18 4h1a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-1"/><path d="M6 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h1"/><path d="M15 4v16"/><path d="M9 4v16"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+        </div>
+        <span class="bnav-label">Workout</span>
+      </button>
+      <button class="bnav-tab" data-tab="medocs" data-index="2" onclick="App.goTo('medocs')">
+        <div class="bnav-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/><path d="M17.5 15.5v4M15.5 17.5h4"/></svg>
+        </div>
+        <span class="bnav-label">Médocs</span>
+      </button>
+      <button class="bnav-tab" data-tab="business" data-index="3" onclick="App.goTo('business')">
+        <div class="bnav-icon">
+          <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </div>
+        <span class="bnav-label">Business</span>
+      </button>
+      <button class="bnav-tab" data-tab="divers" data-index="4" onclick="App.goTo('divers')">
+        <div class="bnav-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+        </div>
+        <span class="bnav-label">Divers</span>
+      </button>
+    </nav>
+
+  </div><!-- /main -->
+
+  <div id="modals"></div>
+  <div id="toast"></div>
+
+</div>
+
+<script src="db.js"></script>
+<script src="utils.js"></script>
+<script src="app.js"></script>
+<script src="workout.js"></script>
+<script src="medocs.js"></script>
+<script src="catalogue.js"></script>
+<script src="orders.js"></script>
+<script src="clients.js"></script>
+<script src="protocoles.js"></script>
+<script src="finances.js"></script>
+<script src="todos.js"></script>
+<script src="divers.js"></script>
+<script src="mood.js"></script>
+<script src="weight.js"></script>
+<script src="recap.js"></script>
+<script src="notifs.js"></script>
+<script src="vault.js"></script>
+<script src="tiktok.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').then(reg => {
+        // Bug 2 fix: detect new SW version and prompt user to reload
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              const banner = document.createElement('div');
+              banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid #7c6bff;border-radius:16px;padding:12px 20px;display:flex;align-items:center;gap:12px;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,0.5);font-size:13px;color:#fff;white-space:nowrap';
+              banner.innerHTML = '🔄 Mise à jour disponible <button onclick="window.location.reload()" style="background:#7c6bff;border:none;color:#fff;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-left:4px">Actualiser</button>';
+              document.body.appendChild(banner);
+            }
+          });
+        });
+        setInterval(() => reg.update(), 60000);
+      }).catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
