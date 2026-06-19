@@ -561,6 +561,11 @@ const App = (() => {
   history.replaceState({ tab: 'home', biz: null }, '');
   window.addEventListener('popstate', e => {
     const state = e.state || {};
+    if (document.getElementById('modals').querySelector('.picker-overlay')) {
+      Tags._closePicker();
+      history.pushState(state, '');
+      return;
+    }
     if (document.getElementById('modals').children.length) {
       Utils.closeModals();
       history.pushState(state, '');

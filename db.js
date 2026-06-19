@@ -99,7 +99,7 @@ const DB = (() => {
   const STORES = [
     'workout_program', 'medocs', 'orders', 'catalogue', 'clients',
     'protocoles', 'finances', 'todos', 'mood', 'settings',
-    'weight', 'weekly_recap', 'tiktok_stats',
+    'weight', 'weekly_recap', 'tiktok_stats', 'categories', 'tags',
   ];
 
   function _col(store) {

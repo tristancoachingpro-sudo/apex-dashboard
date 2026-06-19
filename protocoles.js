@@ -43,7 +43,6 @@ const Protocoles = (() => {
   }
 
   async function _openEditor(proto) {
-    const products = await DB.getAll('catalogue');
     let numWeeks = proto ? Math.max(proto.weeks?.length || 4, 4) : 8;
     window._protoData = {
       name: proto?.name || '',
@@ -72,14 +71,8 @@ const Protocoles = (() => {
 
       <div class="form-group">
         <label class="form-label">PRODUITS DANS LE PROTOCOLE</label>
-        <div style="display:flex;gap:8px">
-          <select class="form-select" id="proto-prod-select" style="flex:1">
-            <option value="">Ajouter un produit...</option>
-            ${products.map(p => `<option value="${Utils.escAttr(p.name)}">${p.name}${p.brand?' — '+p.brand:''}</option>`).join('')}
-          </select>
-          <button class="btn-secondary" onclick="Protocoles._addProductRow()" style="padding:9px 14px">+</button>
-        </div>
-        <input class="form-input" id="proto-prod-custom" placeholder="Ou nom personnalisé" style="margin-top:6px">
+        <button class="btn-primary" onclick="Protocoles._openProductPicker()" style="width:100%;padding:12px;font-size:14px">🔍 Ajouter un produit du catalogue</button>
+        <input class="form-input" id="proto-prod-custom" placeholder="Ou nom personnalisé" style="margin-top:8px">
         <button class="btn-secondary" style="width:100%;margin-top:6px;font-size:12px" onclick="Protocoles._addCustomRow()">+ Ajouter nom personnalisé</button>
       </div>
 
@@ -108,14 +101,18 @@ const Protocoles = (() => {
     _renderProtoTable();
   }
 
-  function _addProductRow() {
-    const sel = document.getElementById('proto-prod-select');
-    if (!sel?.value) return;
-    if (!window._protoData.productRows.includes(sel.value)) {
-      window._protoData.productRows.push(sel.value);
-    }
-    sel.value = '';
-    _renderProtoTable();
+  async function _openProductPicker() {
+    const products = await DB.getAll('catalogue');
+    await Tags.openProductPicker({
+      title: 'Ajouter un produit',
+      products,
+      onSelect: (product) => {
+        if (!window._protoData.productRows.includes(product.name)) {
+          window._protoData.productRows.push(product.name);
+        }
+        _renderProtoTable();
+      },
+    });
   }
 
   function _addCustomRow() {
@@ -349,5 +346,5 @@ const Protocoles = (() => {
     });
   }
 
-  return { init, render, openNew, openEdit, openDetail, createOrderFromProto, _addProductRow, _addCustomRow, _resizeWeeks, _renderProtoTable, _setCellValue, _copyPrev, _removeRow, _save, _delete };
+  return { init, render, openNew, openEdit, openDetail, createOrderFromProto, _openProductPicker, _addCustomRow, _resizeWeeks, _renderProtoTable, _setCellValue, _copyPrev, _removeRow, _save, _delete };
 })();

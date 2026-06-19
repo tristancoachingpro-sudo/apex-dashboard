@@ -135,7 +135,6 @@ const Orders = (() => {
 
   // ── New Order ────────────────────────────────────────────────
   async function openNew(prefillProducts) {
-    const products = await DB.getAll('catalogue');
     window._orderProducts = prefillProducts
       ? prefillProducts.map(p => ({...p, qty: p.qty || 1}))
       : [];
@@ -144,11 +143,6 @@ const Orders = (() => {
     window._orderOverrideDate = null;
     window._orderAdjPct = 0;
     window._orderFinalSell = undefined;
-
-    const productOptions = products.map(p => {
-      const effectiveSell = Catalogue.getEffectiveSellPrice(p);
-      return `<option value="${p.id}" data-name="${Utils.escAttr(p.name)}" data-brand="${Utils.escAttr(p.brand||'')}" data-buy="${p.buyPrice}" data-sell="${effectiveSell}">${p.name}${p.brand ? ' — '+p.brand : ''} (${Utils.formatMoneyAbs(effectiveSell)})</option>`;
-    }).join('');
 
     Utils.modal(`
       <div class="modal-title">Nouvelle commande</div>
@@ -173,14 +167,8 @@ const Orders = (() => {
       <div class="form-group">
         <label class="form-label">PRODUITS</label>
         <div id="ord-products-list"></div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <select class="form-select" id="ord-prod-select" style="flex:1">
-            <option value="">Choisir un produit du catalogue...</option>
-            ${productOptions}
-          </select>
-          <button class="btn-secondary" onclick="Orders._addProduct()"
-            style="white-space:nowrap;padding:9px 16px;font-size:16px;font-weight:700">+</button>
-        </div>
+        <button class="btn-primary" onclick="Orders._openProductPicker()"
+          style="margin-top:8px;width:100%;padding:12px;font-size:14px">🔍 Choisir un produit</button>
         <button class="btn-secondary" onclick="Orders._addCustomProduct()"
           style="margin-top:8px;width:100%;font-size:12px">+ Produit hors catalogue</button>
       </div>
@@ -327,28 +315,29 @@ const Orders = (() => {
     }
   }
 
-  async function _addProduct() {
-    const sel = document.getElementById('ord-prod-select');
-    const id = sel?.value;
-    if (!id) { Utils.toast('⚠️ Choisis un produit'); return; }
-    const opt = sel.options[sel.selectedIndex];
-    const existing = (window._orderProducts || []).find(p => p.productId === id);
-    if (existing) { existing.qty++; }
-    else {
-      // Recalcule le prix effectif depuis le catalogue
-      const catalogProduct = await DB.get('catalogue', id);
-      const effectiveSell = catalogProduct ? Catalogue.getEffectiveSellPrice(catalogProduct) : (parseFloat(opt.dataset.sell) || 0);
-      window._orderProducts.push({
-        productId: id,
-        name: opt.dataset.name,
-        brand: opt.dataset.brand || '',
-        sellPrice: effectiveSell,
-        buyPrice:  parseFloat(opt.dataset.buy) || 0,
-        qty: 1,
-      });
-    }
-    sel.value = '';
-    _renderOrderProducts();
+  async function _openProductPicker() {
+    const products = await DB.getAll('catalogue');
+    await Tags.openProductPicker({
+      title: 'Choisir un produit',
+      products,
+      onSelect: (catalogProduct) => {
+        const existing = (window._orderProducts || []).find(p => p.productId === catalogProduct.id);
+        if (existing) { existing.qty++; }
+        else {
+          const effectiveSell = Catalogue.getEffectiveSellPrice(catalogProduct);
+          if (!window._orderProducts) window._orderProducts = [];
+          window._orderProducts.push({
+            productId: catalogProduct.id,
+            name: catalogProduct.name,
+            brand: catalogProduct.brand || '',
+            sellPrice: effectiveSell,
+            buyPrice: catalogProduct.buyPrice || 0,
+            qty: 1,
+          });
+        }
+        _renderOrderProducts();
+      },
+    });
   }
 
   function _addCustomProduct() {
@@ -552,18 +541,12 @@ const Orders = (() => {
   async function openEdit(id) {
     const o = await DB.get('orders', id);
     if (!o) return;
-    const products = await DB.getAll('catalogue');
 
     window._orderProducts = (o.products || []).map(p => ({...p}));
     window._orderTotalSell = o.totalSell || 0;
     window._orderTotalBuy  = o.totalBuy  || 0;
     window._orderOverrideDate = null;
     window._editingOrderId = id;
-
-    const productOptions = products.map(p => {
-      const effectiveSell = Catalogue.getEffectiveSellPrice(p);
-      return `<option value="${p.id}" data-name="${Utils.escAttr(p.name)}" data-brand="${Utils.escAttr(p.brand||'')}" data-buy="${p.buyPrice}" data-sell="${effectiveSell}">${p.name}${p.brand ? ' — '+p.brand : ''} (${Utils.formatMoneyAbs(effectiveSell)})</option>`;
-    }).join('');
 
     Utils.modal(`
       <div class="modal-title">Modifier commande</div>
@@ -576,13 +559,8 @@ const Orders = (() => {
       <div class="form-group">
         <label class="form-label">PRODUITS</label>
         <div id="ord-products-list"></div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <select class="form-select" id="ord-prod-select" style="flex:1">
-            <option value="">Ajouter un produit...</option>
-            ${productOptions}
-          </select>
-          <button class="btn-secondary" onclick="Orders._addProduct()" style="padding:9px 16px;font-size:16px;font-weight:700">+</button>
-        </div>
+        <button class="btn-primary" onclick="Orders._openProductPicker()"
+          style="margin-top:8px;width:100%;padding:12px;font-size:14px">🔍 Choisir un produit</button>
         <button class="btn-secondary" onclick="Orders._addCustomProduct()" style="margin-top:8px;width:100%;font-size:12px">+ Produit hors catalogue</button>
       </div>
 
@@ -703,7 +681,7 @@ const Orders = (() => {
 
   return {
     init, render, setFilter, setSearch, openNew, openEdit, _saveEdit,
-    _addProduct, _addCustomProduct, _confirmCustom,
+    _openProductPicker, _addCustomProduct, _confirmCustom,
     _updateQty, _removeProduct, _save,
     _updateShipping, _updateShippingDiff, _updateAdjustment,
     openDetail, _setStatus, _delete, _copyMsg, _selectClient,
@@ -860,7 +838,7 @@ Orders.duplicate = async function(id) {
 // ── Express order ─────────────────────────────────────────────
 Orders.openExpress = async function() {
   const clients = await DB.getAll('clients');
-  const products = await DB.getAll('catalogue');
+  window._expSelectedProduct = null;
 
   Utils.modal(`
     <div class="modal-title">⚡ Commande Express</div>
@@ -876,10 +854,8 @@ Orders.openExpress = async function() {
 
     <div class="form-group">
       <label class="form-label">PRODUIT</label>
-      <select class="form-select" id="exp-product">
-        <option value="">Choisir un produit...</option>
-        ${products.map(p => { const es = Catalogue.getEffectiveSellPrice(p); return `<option value="${p.id}" data-sell="${es}" data-buy="${p.buyPrice}" data-name="${Utils.escAttr(p.name)}" data-brand="${Utils.escAttr(p.brand||'')}">${p.name}${p.brand?' — '+p.brand:''} (${Utils.formatMoneyAbs(es)})</option>`; }).join('')}
-      </select>
+      <div id="exp-product-chosen"></div>
+      <button class="btn-primary" onclick="Orders._openExpressPicker()" style="width:100%;padding:12px;font-size:14px">🔍 Choisir un produit</button>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -899,16 +875,14 @@ Orders.openExpress = async function() {
     </div>
   `);
 
-  // Auto-calc total
   const calcTotal = () => {
-    const sel = document.getElementById('exp-product');
     const qty = parseInt(document.getElementById('exp-qty')?.value) || 1;
-    const sell = parseFloat(sel?.options[sel.selectedIndex]?.dataset?.sell) || 0;
+    const sell = window._expSelectedProduct ? Catalogue.getEffectiveSellPrice(window._expSelectedProduct) : 0;
     const el = document.getElementById('exp-total');
     if (el) el.textContent = Utils.formatMoneyAbs(sell * qty);
   };
-  document.getElementById('exp-product')?.addEventListener('change', calcTotal);
   document.getElementById('exp-qty')?.addEventListener('input', calcTotal);
+  window._expCalcTotal = calcTotal;
 
   // Client autocomplete
   const expInput = document.getElementById('exp-client');
@@ -927,15 +901,38 @@ Orders.openExpress = async function() {
   expInput?.addEventListener('blur', () => setTimeout(() => { expList.style.display='none'; }, 200));
 };
 
+Orders._openExpressPicker = async function() {
+  const products = await DB.getAll('catalogue');
+  await Tags.openProductPicker({
+    title: 'Choisir un produit',
+    products,
+    onSelect: (product) => {
+      window._expSelectedProduct = product;
+      const sell = Catalogue.getEffectiveSellPrice(product);
+      const chosen = document.getElementById('exp-product-chosen');
+      if (chosen) {
+        chosen.innerHTML = `<div class="product-card" style="margin-bottom:10px;cursor:default">
+          <div class="product-thumb">${product.emoji || '💊'}</div>
+          <div class="product-info">
+            <div class="product-name">${product.name}</div>
+            <div class="product-brand">${product.brand || ''}</div>
+          </div>
+          <div class="product-prices"><div class="product-sell">${Utils.formatMoneyAbs(sell)}</div></div>
+        </div>`;
+      }
+      if (window._expCalcTotal) window._expCalcTotal();
+    },
+  });
+};
+
 Orders._saveExpress = async function() {
   const clientInput = document.getElementById('exp-client');
-  const sel = document.getElementById('exp-product');
   const qty = Math.max(1, parseInt(document.getElementById('exp-qty')?.value) || 1);
 
   if (!clientInput?.value.trim()) { Utils.toast('⚠️ Client requis'); return; }
-  if (!sel?.value) { Utils.toast('⚠️ Produit requis'); return; }
+  if (!window._expSelectedProduct) { Utils.toast('⚠️ Produit requis'); return; }
 
-  const opt = sel.options[sel.selectedIndex];
+  const chosen = window._expSelectedProduct;
   const clientName = clientInput.value.trim();
   const clientId = clientInput.dataset.clientId || '';
   let resolvedClientId = clientId;
@@ -947,13 +944,13 @@ Orders._saveExpress = async function() {
     resolvedClientName = c.name;
   }
 
-  const sellPrice = parseFloat(opt.dataset.sell) || 0;
-  const buyPrice  = parseFloat(opt.dataset.buy)  || 0;
-  const product = { name: opt.dataset.name, brand: opt.dataset.brand||'', sellPrice, buyPrice, qty, productId: sel.value };
+  const sellPrice = Catalogue.getEffectiveSellPrice(chosen);
+  const buyPrice  = chosen.buyPrice || 0;
+  const product = { name: chosen.name, brand: chosen.brand||'', sellPrice, buyPrice, qty, productId: chosen.id };
 
   const order = {
     id: Utils.uid(),
-    name: `${resolvedClientName} — ${opt.dataset.name}`,
+    name: `${resolvedClientName} — ${chosen.name}`,
     clientId: resolvedClientId,
     clientName: resolvedClientName,
     products: [product],
@@ -966,6 +963,7 @@ Orders._saveExpress = async function() {
   };
 
   await DB.put('orders', order);
+  window._expSelectedProduct = null;
   Utils.closeModals();
   await Orders.render();
   App.renderHome();
