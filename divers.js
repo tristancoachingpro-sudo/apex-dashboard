@@ -168,6 +168,13 @@ const Divers = (() => {
       <button class="btn-secondary" style="width:100%;margin-bottom:10px;font-size:13px" onclick="Divers._addMoodCriteria()">+ Ajouter un critère</button>
       <button class="btn-primary" style="width:100%;margin-bottom:20px" onclick="Divers._saveMoodCriteria()">Sauvegarder les critères</button>
 
+      <div class="fin-section-title">CATALOGUE</div>
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:20px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">🎯 Réinitialiser la marge de tous les produits</div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">Applique un nouveau % de marge à TOUS les produits du catalogue d'un coup (écrase la marge actuelle de chaque produit).</div>
+        <button class="btn-primary" style="width:100%" onclick="Divers._openBulkMargin()">Modifier la marge de tout le catalogue</button>
+      </div>
+
       <div class="fin-section-title">SAUVEGARDE & DONNÉES</div>
       <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px">
         <div style="font-size:14px;font-weight:700;margin-bottom:4px">📤 Exporter</div>
@@ -260,6 +267,54 @@ const Divers = (() => {
     Utils.toast('✅ Critères sauvegardés');
   }
 
+  async function _openBulkMargin() {
+    const products = await DB.getAll('catalogue');
+    Utils.modal(`
+      <div class="modal-title">Marge de tout le catalogue</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:16px">
+        ${products.length} produit${products.length>1?'s':''} dans le catalogue. La nouvelle marge sera appliquée à TOUS (le prix de vente sera recalculé automatiquement à partir du prix d'achat de chaque produit).
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:var(--radius-lg);padding:14px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:700;color:var(--text-muted)">NOUVELLE MARGE</span>
+          <span id="bulk-margin-label" style="font-size:18px;font-weight:900;color:var(--accent-crystal)">50%</span>
+        </div>
+        <input type="range" id="bulk-margin-slider" min="0" max="200" step="1" value="50"
+          oninput="Divers._updateBulkMarginLabel()"
+          style="width:100%;accent-color:var(--accent-crystal);cursor:pointer">
+        <div style="display:flex;justify-content:space-between;margin-top:4px">
+          <span style="font-size:10px;color:var(--text-muted)">0%</span>
+          <span style="font-size:10px;color:var(--text-muted)">200%</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="Utils.closeModals()">Annuler</button>
+        <button class="btn-danger" onclick="Divers._confirmBulkMargin()">Appliquer à tout le catalogue</button>
+      </div>
+    `);
+  }
+
+  function _updateBulkMarginLabel() {
+    const slider = document.getElementById('bulk-margin-slider');
+    const label = document.getElementById('bulk-margin-label');
+    if (slider && label) label.textContent = (parseInt(slider.value) || 0) + '%';
+  }
+
+  async function _confirmBulkMargin() {
+    const slider = document.getElementById('bulk-margin-slider');
+    const marginPct = parseInt(slider?.value) || 0;
+    Utils.confirm(`Appliquer ${marginPct}% de marge à TOUS les produits du catalogue ? Cette action écrase la marge individuelle de chaque produit.`, async () => {
+      const products = await DB.getAll('catalogue');
+      for (const p of products) {
+        const buyPrice = p.buyPrice || 0;
+        const sellPrice = buyPrice ? Math.round(buyPrice * (1 + marginPct/100) * 100) / 100 : (p.sellPrice || 0);
+        await DB.put('catalogue', { ...p, marginPct, sellPrice });
+      }
+      Utils.closeModals();
+      Utils.toast(`✅ Marge de ${marginPct}% appliquée à ${products.length} produit${products.length>1?'s':''}`);
+    });
+  }
+
   async function exportData() {
     const data = await DB.exportAll();
     const json = JSON.stringify(data, null, 2);
@@ -331,5 +386,5 @@ const Divers = (() => {
     await Recap.render(document.getElementById('divers-sub-content'), 0);
   }
 
-  return { init, render, openMood, openProgram, openVault, openNotifs, openWeight, openRecap, _saveGoal, _saveProgram, _changeCycleLen, _setAnchor, openSettings, _confirmImport, _saveSupplierTemplate, _renderMoodCriteriaEditor, _addMoodCriteria, _updateMoodCriteria, _removeMoodCriteria, _saveMoodCriteria, exportData, importData };
+  return { init, render, openMood, openProgram, openVault, openNotifs, openWeight, openRecap, _saveGoal, _saveProgram, _changeCycleLen, _setAnchor, openSettings, _confirmImport, _saveSupplierTemplate, _renderMoodCriteriaEditor, _addMoodCriteria, _updateMoodCriteria, _removeMoodCriteria, _saveMoodCriteria, exportData, importData, _openBulkMargin, _updateBulkMarginLabel, _confirmBulkMargin };
 })();

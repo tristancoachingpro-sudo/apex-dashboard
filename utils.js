@@ -44,6 +44,15 @@ const Utils = (() => {
     return (Number(val) || 0).toFixed(0) + '€';
   }
 
+  // Garde 2 décimales si le montant n'est pas un entier rond (évite de masquer
+  // des écarts du type 24.70€ affiché "25€" qui rendaient les totaux illisibles)
+  function formatMoneyPrecise(val) {
+    const n = Number(val) || 0;
+    const rounded2 = Math.round(n * 100) / 100;
+    const isWhole = Math.abs(rounded2 - Math.round(rounded2)) < 0.005;
+    return (isWhole ? rounded2.toFixed(0) : rounded2.toFixed(2)) + '€';
+  }
+
   function pct(a, b) {
     if (!b) return 0;
     return Math.round((a / b) * 100);
@@ -153,7 +162,7 @@ const Utils = (() => {
 
   return {
     uid, today, dateKey, formatDate, formatDateFull, greeting, haptic, animateCount,
-    formatMoney, formatMoneyAbs, pct, margin, escAttr,
+    formatMoney, formatMoneyAbs, formatMoneyPrecise, pct, margin, escAttr,
     toast, modal, closeModals, confirm,
     getDayKey, scoreColor,
     PIPELINE_STEPS, statusClass, statusLabel,

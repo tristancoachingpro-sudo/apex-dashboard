@@ -201,8 +201,8 @@ const Orders = (() => {
       </div>
 
       <div class="order-total-row">
-        <span class="order-total-label">Total produits</span>
-        <span class="order-total-val" id="ord-total">0€</span>
+        <span class="order-total-label">Prix d'achat total</span>
+        <span class="order-total-val" id="ord-total" style="color:var(--accent-red)">0€</span>
       </div>
 
       <!-- Ajustement de marge à la finalisation -->
@@ -225,6 +225,10 @@ const Orders = (() => {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
           <span style="font-size:12px;color:var(--text-muted)">Prix final client</span>
           <span id="ord-final-price" style="font-size:20px;font-weight:900;color:var(--accent-green)">0€</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);font-size:13px">
+          <span id="ord-profit-formula" style="color:var(--text-muted)">0€ − 0€ =</span>
+          <span id="ord-profit-val" style="font-size:18px;font-weight:900;color:var(--accent-green)">0€</span>
         </div>
       </div>
 
@@ -260,7 +264,7 @@ const Orders = (() => {
         <input class="form-input" type="number" min="1" value="${p.qty}"
           onchange="Orders._updateQty(${i},this.value)"
           style="width:64px;padding:6px 8px;text-align:center;flex-shrink:0">
-        <span class="opr-price">${Utils.formatMoneyAbs(lineSell)}</span>
+        <span class="opr-price">${Utils.formatMoneyPrecise(lineSell)}</span>
         <button onclick="Orders._removeProduct(${i})"
           style="color:var(--accent-red);font-size:22px;padding:2px 4px;line-height:1;flex-shrink:0">×</button>
       </div>`;
@@ -271,7 +275,8 @@ const Orders = (() => {
     const grandSell = totalSell + shipSell;
     const grandBuy  = totalBuy  + shipBuy;
     const totalEl = document.getElementById('ord-total');
-    if (totalEl) totalEl.textContent = Utils.formatMoneyAbs(grandSell);
+    // "Prix d'achat total" = ce que TOI tu paies (produits + port fournisseur)
+    if (totalEl) totalEl.textContent = Utils.formatMoneyPrecise(grandBuy);
     window._orderTotalSell = grandSell;
     window._orderTotalBuy  = grandBuy;
     Orders._updateShippingDiff();
@@ -282,9 +287,12 @@ const Orders = (() => {
     const slider = document.getElementById('ord-adj-slider');
     const label = document.getElementById('ord-adj-label');
     const finalEl = document.getElementById('ord-final-price');
+    const profitFormulaEl = document.getElementById('ord-profit-formula');
+    const profitValEl = document.getElementById('ord-profit-val');
     if (!slider) return;
     const pct = parseInt(slider.value) || 0;
     const base = window._orderTotalSell || 0;
+    const buyTotal = window._orderTotalBuy || 0;
     const adjusted = Math.round(base * (1 + pct/100) * 100) / 100;
     window._orderAdjPct = pct;
     window._orderFinalSell = adjusted;
@@ -292,7 +300,17 @@ const Orders = (() => {
       label.textContent = (pct >= 0 ? '+' : '') + pct + '%';
       label.style.color = pct > 0 ? 'var(--accent-green)' : pct < 0 ? 'var(--accent-red)' : 'var(--accent-crystal)';
     }
-    if (finalEl) finalEl.textContent = Utils.formatMoneyAbs(adjusted);
+    if (finalEl) finalEl.textContent = Utils.formatMoneyPrecise(adjusted);
+
+    // Bénéfice en temps réel : prix client (ajusté) − prix d'achat total
+    const profit = Math.round((adjusted - buyTotal) * 100) / 100;
+    if (profitFormulaEl) {
+      profitFormulaEl.textContent = `${Utils.formatMoneyPrecise(adjusted)} − ${Utils.formatMoneyPrecise(buyTotal)} =`;
+    }
+    if (profitValEl) {
+      profitValEl.textContent = (profit >= 0 ? '' : '−') + Utils.formatMoneyPrecise(Math.abs(profit));
+      profitValEl.style.color = profit >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+    }
   }
 
   function _updateShipping() { _renderOrderProducts(); }
@@ -307,10 +325,10 @@ const Orders = (() => {
       el.textContent = 'Port neutre (0€ de marge)';
       el.style.color = 'var(--text-muted)';
     } else if (diff > 0) {
-      el.textContent = `+${Utils.formatMoneyAbs(diff)} de marge sur le port`;
+      el.textContent = `+${Utils.formatMoneyPrecise(diff)} de marge sur le port`;
       el.style.color = 'var(--accent-green)';
     } else {
-      el.textContent = `${Utils.formatMoneyAbs(diff)} sur le port (offert ou remise)`;
+      el.textContent = `${Utils.formatMoneyPrecise(diff)} sur le port (offert ou remise)`;
       el.style.color = 'var(--accent-red)';
     }
   }
