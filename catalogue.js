@@ -3,6 +3,9 @@ const Catalogue = (() => {
   let searchQuery = '';
   let filterCatId = null;     // catégorie (ou sous-catégorie) sélectionnée, null = toutes
   let filterTagIds = [];      // tags actifs (combinables, ET logique)
+  let selectMode = false;
+  let selectedIds = new Set();
+  let _lastFilteredIds = [];
 
   async function init() {}
 
@@ -55,6 +58,8 @@ const Catalogue = (() => {
         <div class="empty-state-text">Catalogue vide</div>
         <div class="empty-state-sub">Ajoute ton premier produit</div>
       </div>`;
+      _lastFilteredIds = [];
+      _renderSelectBar();
       return;
     }
     if (!filtered.length) {
@@ -63,6 +68,8 @@ const Catalogue = (() => {
         <div class="empty-state-text">Aucun résultat</div>
         <div class="empty-state-sub">Modifie ta recherche ou tes filtres</div>
       </div>`;
+      _lastFilteredIds = [];
+      _renderSelectBar();
       return;
     }
 
@@ -86,13 +93,19 @@ const Catalogue = (() => {
       list.innerHTML = `<div class="picker-count" style="margin-bottom:8px">${filtered.length} résultat${filtered.length>1?'s':''}</div>`
         + filtered.map(p => _productCardHtml(p)).join('');
     }
+
+    _lastFilteredIds = filtered.map(p => p.id);
+    _renderSelectBar();
   }
 
   function _productCardHtml(p) {
     const marginPct = p.marginPct !== undefined ? p.marginPct : 50;
     const sellPrice = p.buyPrice ? Math.round(p.buyPrice * (1 + marginPct/100) * 100)/100 : (p.sellPrice || 0);
     const tagChips = (p._tagNames||[]).slice(0,4).map(t => `<span class="picker-tag-chip">${Utils.escAttr(t)}</span>`).join('');
-    return `<div class="product-card" onclick="Catalogue.openEdit('${p.id}')">
+    const isSelected = selectedIds.has(p.id);
+    const clickAction = selectMode ? `Catalogue.toggleSelect('${p.id}')` : `Catalogue.openEdit('${p.id}')`;
+    return `<div class="product-card ${selectMode?'select-mode':''} ${isSelected?'selected':''}" onclick="${clickAction}">
+      ${selectMode ? `<div class="product-select-box">✓</div>` : ''}
       <div class="product-thumb">${p.emoji || '💊'}</div>
       <div class="product-info">
         <div class="product-name">${p.name}</div>
@@ -113,6 +126,68 @@ const Catalogue = (() => {
   function toggleTagFilter(id) {
     filterTagIds = filterTagIds.filter(t => t !== id);
     render();
+  }
+
+  // ── Mode sélection multiple (suppression en masse) ────────────
+  function toggleSelectMode() {
+    selectMode = !selectMode;
+    selectedIds = new Set();
+    const btn = document.getElementById('cat-select-toggle-btn');
+    if (btn) {
+      btn.textContent = selectMode ? '✕ Annuler' : '☑️ Sélection';
+      btn.classList.toggle('active', selectMode);
+    }
+    render();
+  }
+
+  function toggleSelect(id) {
+    if (selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    render();
+  }
+
+  function selectAllVisible() {
+    _lastFilteredIds.forEach(id => selectedIds.add(id));
+    render();
+  }
+
+  function deselectAll() {
+    selectedIds = new Set();
+    render();
+  }
+
+  function _renderSelectBar() {
+    const bar = document.getElementById('catalogue-select-bar');
+    if (!bar) return;
+    if (!selectMode) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    const count = selectedIds.size;
+    const allVisibleSelected = _lastFilteredIds.length > 0 && _lastFilteredIds.every(id => selectedIds.has(id));
+    const delBtnStyle = `padding:8px 14px;font-size:12px${count===0?';opacity:0.4' : ''}`;
+    bar.innerHTML = `
+      <span class="sel-count">${count} sélectionné${count>1?'s':''}</span>
+      <div class="sel-actions">
+        <button class="btn-secondary" style="padding:8px 12px;font-size:12px" onclick="Catalogue.${allVisibleSelected ? 'deselectAll' : 'selectAllVisible'}()">${allVisibleSelected ? 'Tout désélectionner' : 'Tout sélectionner'}</button>
+        <button class="btn-danger" style="${delBtnStyle}" ${count===0?'disabled':''} onclick="Catalogue._deleteSelected()">🗑 Supprimer (${count})</button>
+      </div>
+    `;
+  }
+
+  function _deleteSelected() {
+    const count = selectedIds.size;
+    if (!count) return;
+    Utils.confirm(`Supprimer ${count} produit${count>1?'s':''} du catalogue ? Cette action est irréversible.`, async () => {
+      const ids = [...selectedIds];
+      for (const id of ids) {
+        await DB.del('catalogue', id);
+      }
+      selectedIds = new Set();
+      selectMode = false;
+      const btn = document.getElementById('cat-select-toggle-btn');
+      if (btn) { btn.textContent = '☑️ Sélection'; btn.classList.remove('active'); }
+      await render();
+      Utils.toast(`🗑 ${count} produit${count>1?'s':''} supprimé${count>1?'s':''}`);
+    });
   }
 
   async function openTagFilterPicker() {
@@ -356,5 +431,6 @@ const Catalogue = (() => {
     init, render, openAdd, openEdit, setCat, setSearch, toggleTagFilter, openTagFilterPicker,
     _save, _delete, getAll, _updateSellPreview, getEffectiveSellPrice,
     _setProdCategory, _removeProdTag, _openProdTagPicker, _reopenFormAfterTags,
+    toggleSelectMode, toggleSelect, selectAllVisible, deselectAll, _deleteSelected,
   };
 })();

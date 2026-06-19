@@ -249,12 +249,16 @@
           <div class="biz-subheader">
             <button class="biz-back-btn" onclick="App.businessBack()">‹ Business</button>
             <h2>Catalogue</h2>
-            <button class="btn-primary" onclick="Catalogue.openAdd()">+ Produit</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn-secondary" id="cat-select-toggle-btn" style="padding:9px 14px;font-size:13px" onclick="Catalogue.toggleSelectMode()">☑️ Sélection</button>
+              <button class="btn-primary" onclick="Catalogue.openAdd()">+ Produit</button>
+            </div>
           </div>
           <div class="biz-body">
             <div class="catalogue-filters" id="catalogue-filters"></div>
             <div id="catalogue-list"></div>
           </div>
+          <div id="catalogue-select-bar" class="select-action-bar" style="display:none"></div>
         </div>
         <div id="biz-clients" class="biz-screen">
           <div class="biz-subheader">
