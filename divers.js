@@ -135,7 +135,7 @@ const Divers = (() => {
 
       <div class="fin-section-title">🎯 OBJECTIF FINANCIER (ACCUEIL)</div>
       <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:16px">
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Configure un objectif mensuel visible sur l'accueil avec une barre de progression.</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Configure un objectif visible sur l'accueil avec une barre de progression, sur la durée de ton choix.</div>
         <div class="form-group">
           <label class="form-label">LIBELLÉ</label>
           <input class="form-input" id="fin-goal-label-input" placeholder="Ex: Objectif du mois, Target Juillet..."
@@ -145,6 +145,14 @@ const Divers = (() => {
           <label class="form-label">MONTANT CIBLE (€ de bénéfice)</label>
           <input class="form-input" id="fin-goal-amount-input" type="number" placeholder="Ex: 2000"
             value="${await DB.getSetting('fin_goal_amount') || ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">DURÉE DE L'OBJECTIF (JOURS)</label>
+          <input class="form-input" id="fin-goal-days-input" type="number" min="1" placeholder="Ex: 10, 30, 60..."
+            value="${await DB.getSetting('fin_goal_days') || ''}">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            Le compte à rebours redémarre dès que tu sauvegardes l'objectif. Laisse vide pour reprendre l'ancien comportement (jusqu'à la fin du mois civil).
+          </div>
         </div>
         <button class="btn-primary" style="width:100%" onclick="Divers._saveGoal()">Sauvegarder l'objectif</button>
       </div>
@@ -215,8 +223,13 @@ const Divers = (() => {
   async function _saveGoal() {
     const label  = document.getElementById('fin-goal-label-input')?.value.trim() || 'Objectif du mois';
     const amount = parseFloat(document.getElementById('fin-goal-amount-input')?.value) || 0;
+    const daysInput = document.getElementById('fin-goal-days-input')?.value;
+    const days = daysInput ? parseInt(daysInput) : 0;
     await DB.setSetting('fin_goal_label', label);
     await DB.setSetting('fin_goal_amount', amount);
+    await DB.setSetting('fin_goal_days', days > 0 ? days : '');
+    // Redémarre le compte à rebours à partir de maintenant à chaque sauvegarde
+    await DB.setSetting('fin_goal_start', Utils.today());
     Utils.toast('✅ Objectif sauvegardé');
     App.renderHome();
   }

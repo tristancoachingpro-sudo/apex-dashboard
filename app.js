@@ -332,11 +332,27 @@ const App = (() => {
     const now       = new Date();
     const todayStr  = Utils.today();
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+    // Fenêtre de l'objectif : si une durée perso est définie, on utilise
+    // [fin_goal_start, fin_goal_start + fin_goal_days[, sinon le mois civil (comportement historique)
+    const goalDaysSetting = await DB.getSetting('fin_goal_days');
+    const goalDays = goalDaysSetting ? parseInt(goalDaysSetting) : 0;
+    let goalStartStr = await DB.getSetting('fin_goal_start');
+    if (goalDays > 0 && !goalStartStr) goalStartStr = todayStr; // sécurité si jamais absent
+    const goalStartDate = (goalDays > 0 && goalStartStr) ? new Date(goalStartStr + 'T00:00:00') : null;
+    const goalEndDate = goalStartDate ? new Date(goalStartDate.getTime() + goalDays * 86400000) : null;
+
     let monthRevenue = 0;
     allOrders.forEach(o => {
       if (o.status === 'delivered') {
         const ref = o.deliveredAt || o.createdAt || '';
-        if (ref.startsWith(thisMonth)) monthRevenue += (o.totalSell||0)-(o.totalBuy||0);
+        if (!ref) return;
+        if (goalStartDate && goalEndDate) {
+          const refDate = new Date(ref.slice(0,10) + 'T12:00:00');
+          if (refDate >= goalStartDate && refDate < goalEndDate) monthRevenue += (o.totalSell||0)-(o.totalBuy||0);
+        } else if (ref.startsWith(thisMonth)) {
+          monthRevenue += (o.totalSell||0)-(o.totalBuy||0);
+        }
       }
     });
 
@@ -386,8 +402,17 @@ const App = (() => {
         const pct = Math.min(100, Math.round((monthRevenue / goalTarget) * 100));
         const remaining = Math.max(0, goalTarget - monthRevenue);
         const over = monthRevenue > goalTarget;
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-        const daysLeft = daysInMonth - now.getDate();
+
+        let daysLeft;
+        if (goalStartDate && goalEndDate) {
+          // Durée perso : compte à rebours réel depuis la date de fin de la fenêtre
+          const msLeft = goalEndDate.getTime() - now.getTime();
+          daysLeft = Math.max(0, Math.ceil(msLeft / 86400000));
+        } else {
+          // Comportement historique : jusqu'à la fin du mois civil
+          const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+          daysLeft = daysInMonth - now.getDate();
+        }
         const perDay = daysLeft > 0 && remaining > 0 ? Math.ceil(remaining / daysLeft) : 0;
 
         document.getElementById('fgc-label').textContent    = goalLabel;
@@ -397,7 +422,7 @@ const App = (() => {
         document.getElementById('fgc-remaining').textContent = over
           ? '🎉 Objectif dépassé !'
           : perDay > 0
-            ? `${Math.round(remaining)}€ restants · ${perDay}€/jour`
+            ? `${Math.round(remaining)}€ restants · ${perDay}€/jour · ${daysLeft}j`
             : `Il manque ${Math.round(remaining)}€`;
 
         const fill = document.getElementById('fgc-fill');
