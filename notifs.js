@@ -289,16 +289,26 @@ const Notifs = (() => {
   // ── Sauvegarde le token FCM dans Firestore ───────────────────
   async function savePushSubscription() {
     try {
-      // Attend que le SDK Firebase Messaging soit prêt
-      if (!window.firebase || !firebase.messaging) return;
+      // Attend que le SDK Firebase Messaging soit chargé (chargement async dans db.js)
+      let attempts = 0;
+      while ((!window.firebase || !firebase.messaging) && attempts < 20) {
+        await new Promise(r => setTimeout(r, 500));
+        attempts++;
+      }
+      if (!window.firebase || !firebase.messaging) {
+        console.warn('Firebase Messaging SDK not loaded after 10s');
+        return;
+      }
       const messaging = firebase.messaging();
       const VAPID_KEY = 'BGCaqieB9oadheH18FRWLinqEndmI7rPTbJTrA8FR3urdyAdVa9AEc3syh_OHV2iUIddHn0Ko67KkDIwTALXaYM';
       const token = await messaging.getToken({ vapidKey: VAPID_KEY });
       if (token) {
         await DB.setSetting('fcm_token', token);
         console.log('FCM token saved, length:', token.length);
+      } else {
+        console.warn('FCM getToken returned null — permission denied?');
       }
-    } catch(e) { console.warn('FCM token failed:', e); }
+    } catch(e) { console.warn('FCM token failed:', e.message); }
   }
 
   // ── Main schedule function — appelé à chaque ouverture de l'app ───
