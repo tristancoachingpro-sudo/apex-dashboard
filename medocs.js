@@ -109,8 +109,11 @@ const Medocs = (() => {
       const allTaken = hasDose && info.taken >= info.total;
       const partialTaken = hasDose && info.taken > 0 && !allTaken;
       let extraClass = '';
+      // has-dose doit toujours être présent pour que ::after (le point) existe
+      // dose-taken / dose-partial / dose-missed sont des modificateurs de couleur en plus
       if (isPast && hasDose && !allTaken) extraClass = 'dose-missed';
-      cells += `<div class="cal-day ${isToday ? 'today' : ''} ${hasDose ? (allTaken ? 'dose-taken' : partialTaken ? 'dose-partial' : 'has-dose') : ''} ${extraClass}">${d}</div>`;
+      const doseClass = hasDose ? ('has-dose' + (allTaken ? ' dose-taken' : partialTaken ? ' dose-partial' : '')) : '';
+      cells += `<div class="cal-day ${isToday ? 'today' : ''} ${doseClass} ${extraClass}">${d}</div>`;
     }
     const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7;
     for (let d = 1; d <= totalCells - startDow - daysInMonth; d++) {
@@ -142,8 +145,11 @@ const Medocs = (() => {
   // ── Helper : le médicament est-il actif à cette date ? ────
   function _isActiveDate(m, date) {
     const ds = Utils.dateKey(date);
+    // Si protocole défini, respecte les bornes
     if (m.startDate && ds < m.startDate) return false;
     if (m.endDate && ds > m.endDate) return false;
+    // Si pas de startDate mais createdAt connu, ignore les jours avant l'ajout
+    if (!m.startDate && m.createdAt && ds < m.createdAt) return false;
     return true;
   }
 
@@ -254,9 +260,13 @@ const Medocs = (() => {
     listContainer.innerHTML = medocs.map(m => {
       const doses = m.dosesPerDay || 1;
       // Calcul stats : jours pris / jours prévus (sur les 30 derniers jours)
-      const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
+      // Suivi : part de la date d'ajout du médoc (ou 30j max), jusqu'à hier inclus
+      const cutoffDate = new Date(); cutoffDate.setDate(cutoffDate.getDate() - 30);
+      const startRef = m.createdAt && m.createdAt > Utils.dateKey(cutoffDate) ? m.createdAt : Utils.dateKey(cutoffDate);
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = Utils.dateKey(yesterday);
       let planned = 0, taken = 0;
-      for (let d = new Date(cutoff); d <= new Date(todayStr + 'T12:00:00'); d.setDate(d.getDate() + 1)) {
+      for (let d = new Date(startRef + 'T12:00:00'); d <= yesterday; d.setDate(d.getDate() + 1)) {
         const dk = Utils.getDayKey(new Date(d));
         const ds = Utils.dateKey(new Date(d));
         if (m.days && m.days.includes(dk) && _isActiveDate(m, new Date(d))) {
@@ -435,6 +445,7 @@ const Medocs = (() => {
     const medoc = {
       id: existingId || Utils.uid(),
       name,
+      createdAt: existingId ? undefined : Utils.today(),
       dosage: document.getElementById('med-dosage').value.trim(),
       dosesPerDay: window._medDosesSelected || 1,
       type: window._medTypeSelected || 'Oral',
