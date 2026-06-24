@@ -455,10 +455,12 @@ const App = (() => {
     } catch(e) {}
 
     // Médocs card with progress bar
+    // Fix: utilise Utils.getDayKey (→ 'lun','mar'...) et non Workout.getDayKey (→ 'jour1','jour2'...)
     const allMedocs = await DB.getAll('medocs');
+    const medocDayKey = Utils.getDayKey(new Date());
     let takenToday = 0, totalToday = 0;
     allMedocs.forEach(m => {
-      if (m.days && m.days.includes(todayKey)) {
+      if (m.days && m.days.includes(medocDayKey)) {
         totalToday++;
         if (m.taken && m.taken[todayStr]) takenToday++;
       }
