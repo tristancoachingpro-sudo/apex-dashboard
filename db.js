@@ -28,6 +28,7 @@ const _firebaseReadyPromise = new Promise(r => { _firebaseReadyResolve = r; });
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js',
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js',
+    'https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js',
   ];
   let loaded = 0;
   scripts.forEach(src => {

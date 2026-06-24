@@ -286,20 +286,19 @@ const Notifs = (() => {
     };
   }
 
-  // ── Sauvegarde la subscription push dans Firestore ──────────
+  // ── Sauvegarde le token FCM dans Firestore ───────────────────
   async function savePushSubscription() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     try {
-      const reg = await navigator.serviceWorker.ready;
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub) {
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: 'BGCaqieB9oadheH18FRWLinqEndmI7rPTbJTrA8FR3urdyAdVa9AEc3syh_OHV2iUIddHn0Ko67KkDIwTALXaYM',
-        });
+      // Attend que le SDK Firebase Messaging soit prêt
+      if (!window.firebase || !firebase.messaging) return;
+      const messaging = firebase.messaging();
+      const VAPID_KEY = 'BGCaqieB9oadheH18FRWLinqEndmI7rPTbJTrA8FR3urdyAdVa9AEc3syh_OHV2iUIddHn0Ko67KkDIwTALXaYM';
+      const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+      if (token) {
+        await DB.setSetting('fcm_token', token);
+        console.log('FCM token saved, length:', token.length);
       }
-      await DB.setSetting('push_subscription', sub.toJSON());
-    } catch(e) { console.warn('Push subscription failed:', e); }
+    } catch(e) { console.warn('FCM token failed:', e); }
   }
 
   // ── Main schedule function — appelé à chaque ouverture de l'app ───
