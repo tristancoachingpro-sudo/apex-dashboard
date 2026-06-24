@@ -1,5 +1,8 @@
-// ── APEX Service Worker v21 ───────────────────────────────────
-const CACHE_NAME = 'apex-v21';
+// ── APEX Service Worker v22 ───────────────────────────────────
+// v22: Fix notifications — use showTrigger (TimestampTrigger) au lieu de
+// setTimeout qui meurt quand le SW s'endort. Fallback via postMessage pour test immédiat.
+
+const CACHE_NAME = 'apex-v22';
 const ASSETS = [
   './', './index.html', './main.css',
   './db.js', './utils.js', './app.js',
@@ -25,12 +28,9 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Bug 2b fix: Network First strategy — always try network, fall back to cache
-  // This ensures updates on Vercel are reflected immediately
   e.respondWith(
     fetch(e.request)
       .then(response => {
-        // Cache the fresh response for offline use
         if (response.ok && e.request.method === 'GET') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
@@ -41,36 +41,72 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// ── Notification triggered by main thread via postMessage ─────
-self.addEventListener('message', e => {
-  if (e.data?.type === 'SHOW_NOTIF') {
-    const { title, body, tag, icon, delay } = e.data;
-    if (delay && delay > 0) {
+// ── Notifications ─────────────────────────────────────────────
+// SHOW_NOTIF_AT : timestamp précis — survit à l'endormissement du SW
+// SHOW_NOTIF   : delay ms — pour test immédiat uniquement (SW peut mourir)
+self.addEventListener('message', async e => {
+
+  // ── Notification programmée avec timestamp (robuste) ─────
+  if (e.data?.type === 'SHOW_NOTIF_AT') {
+    const { title, body, tag, timestamp } = e.data;
+    const options = {
+      body,
+      icon: './icon-192.png',
+      badge: './icon-192.png',
+      tag: tag || 'apex',
+      renotify: true,
+      vibrate: [200, 100, 200],
+      data: { timestamp },
+    };
+
+    // Utilise showTrigger si disponible (Chrome Android 80+)
+    if ('showTrigger' in Notification.prototype || typeof TimestampTrigger !== 'undefined') {
+      try {
+        options.showTrigger = new TimestampTrigger(timestamp);
+        await self.registration.showNotification(title, options);
+        return;
+      } catch (err) {
+        // Fallback ci-dessous
+      }
+    }
+
+    // Fallback : setTimeout (fonctionne si l'app reste ouverte)
+    const delay = timestamp - Date.now();
+    if (delay > 0) {
       setTimeout(() => {
-        self.registration.showNotification(title, {
-          body,
-          icon: icon || './icon-192.png',
-          badge: './icon-192.png',
-          tag: tag || 'apex',
-          renotify: true,
-          vibrate: [200, 100, 200],
-        });
+        self.registration.showNotification(title, options);
       }, delay);
     } else {
-      self.registration.showNotification(title, {
-        body,
-        icon: icon || './icon-192.png',
-        badge: './icon-192.png',
-        tag: tag || 'apex',
-        renotify: true,
-        vibrate: [200, 100, 200],
-      });
+      self.registration.showNotification(title, options);
     }
+    return;
   }
 
-  // Cancel all pending (can't cancel setTimeout in SW but tag reuse handles dedup)
+  // ── Notification immédiate / test (délai court en ms) ────
+  if (e.data?.type === 'SHOW_NOTIF') {
+    const { title, body, tag, delay } = e.data;
+    const options = {
+      body,
+      icon: './icon-192.png',
+      badge: './icon-192.png',
+      tag: tag || 'apex',
+      renotify: true,
+      vibrate: [200, 100, 200],
+    };
+    if (delay && delay > 0) {
+      setTimeout(() => self.registration.showNotification(title, options), delay);
+    } else {
+      self.registration.showNotification(title, options);
+    }
+    return;
+  }
+
+  // ── Annuler toutes les notifs programmées ─────────────────
   if (e.data?.type === 'CANCEL_ALL') {
-    // Tags will be overwritten on next schedule
+    try {
+      const scheduled = await self.registration.getNotifications({ includeTriggered: true });
+      scheduled.forEach(n => n.close());
+    } catch (err) {}
   }
 });
 
@@ -78,11 +114,8 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      if (clients.length > 0) {
-        clients[0].focus();
-      } else {
-        self.clients.openWindow('./');
-      }
+      if (clients.length > 0) clients[0].focus();
+      else self.clients.openWindow('./');
     })
   );
 });

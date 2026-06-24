@@ -1,7 +1,8 @@
-// ── APEX NOTIFICATIONS v16 ────────────────────────────────────
-// 100% local, no server. Schedules setTimeout-based notifications
-// via the Service Worker on each app launch.
-// On Samsung/Android Chrome this works even when app is backgrounded.
+// ── APEX NOTIFICATIONS v17 ────────────────────────────────────
+// v17: Fix majeur — sendToSW utilise maintenant SHOW_NOTIF_AT avec un
+// timestamp absolu au lieu de SHOW_NOTIF + setTimeout (qui mourait quand
+// le Service Worker s'endormait, rendant toutes les notifs silencieuses
+// sauf le test de 5 sec).
 
 const Notifs = (() => {
 
@@ -27,7 +28,6 @@ const Notifs = (() => {
   async function getConfig() {
     const saved = await DB.getSetting('notif_config');
     if (saved) {
-      // Merge with defaults in case new keys were added
       const merged = { ...DEFAULTS };
       Object.keys(saved).forEach(k => { if (merged[k]) merged[k] = { ...merged[k], ...saved[k] }; });
       return merged;
@@ -55,19 +55,36 @@ const Notifs = (() => {
   }
 
   // ── Core scheduler ────────────────────────────────────────
-  // Calculate ms until next occurrence of hour:min
-  function msUntil(hour, min) {
+  // Retourne un timestamp absolu (ms epoch) pour la prochaine occurrence de hour:min
+  function nextTimestamp(hour, min) {
     const now = new Date();
     const target = new Date();
     target.setHours(hour, min, 0, 0);
     if (target <= now) {
-      // Already passed today → schedule for tomorrow
       target.setDate(target.getDate() + 1);
     }
-    return target - now;
+    return target.getTime();
   }
 
-  async function sendToSW(title, body, tag, delayMs) {
+  // ── Envoie une notif au SW avec timestamp absolu (robuste) ─
+  async function sendToSW(title, body, tag, timestamp) {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg.active) {
+        reg.active.postMessage({
+          type: 'SHOW_NOTIF_AT',
+          title,
+          body,
+          tag,
+          timestamp,
+        });
+      }
+    } catch(e) {}
+  }
+
+  // ── Envoie une notif immédiate avec délai ms (test seulement) ─
+  async function sendToSWDelay(title, body, tag, delayMs) {
     if (!('serviceWorker' in navigator)) return;
     try {
       const reg = await navigator.serviceWorker.ready;
@@ -122,10 +139,7 @@ const Notifs = (() => {
       'Make it count 🏆',
     ];
     const quote = quotes[new Date().getDate() % quotes.length];
-    return {
-      title: `🏋️ ${workout}`,
-      body: quote,
-    };
+    return { title: `🏋️ ${workout}`, body: quote };
   }
 
   async function _buildTasksNotif() {
@@ -187,7 +201,7 @@ const Notifs = (() => {
     const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
     let streak = 0;
     const d = new Date(today + 'T12:00:00');
-    d.setDate(d.getDate() - 1); // Start from yesterday
+    d.setDate(d.getDate() - 1);
     for (let i = 0; i < 30; i++) {
       const ds = Utils.dateKey(d);
       if (sorted.find(e => e.date === ds)) streak++;
@@ -225,8 +239,6 @@ const Notifs = (() => {
 
     const profitStr = `${profit >= 0 ? '+' : ''}${Math.round(profit)}€`;
     const caStr = `+${Math.round(ca)}€`;
-
-    // Motivational framing
     let emoji = profit > 2000 ? '🚀' : profit > 1000 ? '💪' : profit > 500 ? '📈' : profit > 0 ? '✅' : '⚠️';
     let vibe = profit > 2000 ? 'Incroyable — continue !' : profit > 1000 ? 'Excellent mois !' : profit > 500 ? 'Bon travail !' : profit > 0 ? 'On avance !' : 'Analyse tes coûts';
 
@@ -251,12 +263,10 @@ const Notifs = (() => {
     }
 
     const today = Utils.today();
-    // Find oldest active order
     const oldest = [...active].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
     const daysSince = Math.floor((new Date(today) - new Date(oldest.createdAt + 'T12:00:00')) / 86400000);
     const clientName = clientMap[oldest.clientId] || oldest.clientName || '—';
 
-    // Group by status
     const pending = active.filter(o => o.status === 'pending').length;
     const paid = active.filter(o => o.status === 'paid').length;
     const inTransit = active.filter(o => o.status === 'supplier_sent').length;
@@ -276,70 +286,74 @@ const Notifs = (() => {
     };
   }
 
-  // ── Main schedule function — called on every app launch ───
+  // ── Main schedule function — appelé à chaque ouverture de l'app ───
   async function scheduleAll() {
     if (!hasPermission()) return;
 
+    // Annuler les notifs programmées existantes
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg.active) reg.active.postMessage({ type: 'CANCEL_ALL' });
+    } catch(e) {}
+
     const config = await getConfig();
 
-    // Medocs — one notif per unique reminder time across all active medocs
+    // Medocs — une notif par heure de rappel unique parmi les medocs actifs
     if (config.medocs.enabled) {
       const medocs = await DB.getAll('medocs');
       const todayKey = Utils.getDayKey(new Date());
       const todayMedocs = medocs.filter(m => m.days?.includes(todayKey));
 
-      // Collect unique reminder times
       const times = new Set();
       todayMedocs.forEach(m => (m.reminders || []).forEach(t => times.add(t)));
 
       if (times.size > 0) {
         for (const timeStr of times) {
           const [h, min] = timeStr.split(':').map(Number);
-          const delay = msUntil(h, min);
+          const ts = nextTimestamp(h, min);
           const content = await _buildMedocsNotif();
-          if (content) await sendToSW(content.title, content.body, `medoc-${timeStr}`, delay);
+          if (content) await sendToSW(content.title, content.body, `medoc-${timeStr}`, ts);
         }
       } else {
-        // Fallback: use configured hour
-        const delay = msUntil(config.medocs.hour, config.medocs.min);
+        const ts = nextTimestamp(config.medocs.hour, config.medocs.min);
         const content = await _buildMedocsNotif();
-        if (content) await sendToSW(content.title, content.body, 'medoc-main', delay);
+        if (content) await sendToSW(content.title, content.body, 'medoc-main', ts);
       }
     }
 
     // Workout
     if (config.workout.enabled) {
-      const delay = msUntil(config.workout.hour, config.workout.min);
+      const ts = nextTimestamp(config.workout.hour, config.workout.min);
       const content = await _buildWorkoutNotif();
-      if (content) await sendToSW(content.title, content.body, 'workout-daily', delay);
+      if (content) await sendToSW(content.title, content.body, 'workout-daily', ts);
     }
 
     // Tasks
     if (config.tasks.enabled) {
-      const delay = msUntil(config.tasks.hour, config.tasks.min);
+      const ts = nextTimestamp(config.tasks.hour, config.tasks.min);
       const content = await _buildTasksNotif();
-      if (content) await sendToSW(content.title, content.body, 'tasks-daily', delay);
+      if (content) await sendToSW(content.title, content.body, 'tasks-daily', ts);
     }
 
     // Mood
     if (config.mood.enabled) {
-      const delay = msUntil(config.mood.hour, config.mood.min);
+      const ts = nextTimestamp(config.mood.hour, config.mood.min);
       const content = await _buildMoodNotif();
-      if (content) await sendToSW(content.title, content.body, 'mood-daily', delay);
+      if (content) await sendToSW(content.title, content.body, 'mood-daily', ts);
     }
 
     // Finances
     if (config.finances.enabled) {
-      const delay = msUntil(config.finances.hour, config.finances.min);
+      const ts = nextTimestamp(config.finances.hour, config.finances.min);
       const content = await _buildFinancesNotif();
-      if (content) await sendToSW(content.title, content.body, 'finances-daily', delay);
+      if (content) await sendToSW(content.title, content.body, 'finances-daily', ts);
     }
 
     // Orders
     if (config.orders.enabled) {
-      const delay = msUntil(config.orders.hour, config.orders.min);
+      const ts = nextTimestamp(config.orders.hour, config.orders.min);
       const content = await _buildOrdersNotif();
-      if (content) await sendToSW(content.title, content.body, 'orders-daily', delay);
+      if (content) await sendToSW(content.title, content.body, 'orders-daily', ts);
     }
   }
 
@@ -347,6 +361,9 @@ const Notifs = (() => {
   async function renderSettings(container) {
     const config = await getConfig();
     const permitted = hasPermission();
+
+    // Vérifie si TimestampTrigger est supporté
+    const supportsScheduled = typeof TimestampTrigger !== 'undefined';
 
     container.innerHTML = `
       <div class="fin-section-title">🔔 NOTIFICATIONS</div>
@@ -361,9 +378,15 @@ const Notifs = (() => {
           <span style="font-size:18px">✅</span>
           <div>
             <div style="font-size:13px;font-weight:700;color:var(--accent-green)">Notifications actives</div>
-            <div style="font-size:11px;color:var(--text-secondary)">Reprogrammées à chaque ouverture de l'app</div>
+            <div style="font-size:11px;color:var(--text-secondary)">${supportsScheduled ? 'Mode robuste activé (TimestampTrigger ✓)' : 'Reprogrammées à chaque ouverture de l\'app'}</div>
           </div>
         </div>`}
+
+      ${!supportsScheduled && permitted ? `
+        <div style="background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.2);border-radius:var(--radius-lg);padding:12px;margin-bottom:16px">
+          <div style="font-size:12px;color:orange;font-weight:700;margin-bottom:4px">⚠️ Mode compatibilité</div>
+          <div style="font-size:11px;color:var(--text-secondary)">Ton Chrome ne supporte pas encore le scheduling natif. Les notifs fonctionnent si tu ouvres l'app au moins une fois par jour.</div>
+        </div>` : ''}
 
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
         ${Object.entries(config).map(([key, val]) => `
@@ -393,14 +416,12 @@ const Notifs = (() => {
       </button>
     `;
 
-    // Store config in memory for edits
     window._notifConfigEdit = JSON.parse(JSON.stringify(config));
   }
 
   async function _toggleKey(key, enabled) {
     if (!window._notifConfigEdit) window._notifConfigEdit = await getConfig();
     window._notifConfigEdit[key].enabled = enabled;
-    // Re-render
     const container = document.getElementById('notif-settings-container');
     if (container) await renderSettings(container);
   }
@@ -434,7 +455,7 @@ const Notifs = (() => {
 
   async function testNotif() {
     if (!hasPermission()) { Utils.toast('⚠️ Notifications non autorisées'); return; }
-    await sendToSW(
+    await sendToSWDelay(
       '🧪 APEX — Test notification',
       'Si tu vois ça, les notifications fonctionnent parfaitement !',
       'apex-test',
