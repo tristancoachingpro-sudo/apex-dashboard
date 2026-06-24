@@ -445,7 +445,6 @@ const Medocs = (() => {
     const medoc = {
       id: existingId || Utils.uid(),
       name,
-      createdAt: existingId ? undefined : Utils.today(),
       dosage: document.getElementById('med-dosage').value.trim(),
       dosesPerDay: window._medDosesSelected || 1,
       type: window._medTypeSelected || 'Oral',
@@ -456,8 +455,14 @@ const Medocs = (() => {
       notes: document.getElementById('med-notes').value.trim(),
     };
     if (existingId) {
-      const old = await DB.get('medocs', existingId);
-      if (old) medoc.taken = old.taken || {};
+      const existing = await DB.get('medocs', existingId);
+      if (existing) {
+        medoc.taken = existing.taken || {};
+        // Préserve createdAt existant, sinon utilise aujourd'hui comme fallback
+        medoc.createdAt = existing.createdAt || Utils.today();
+      }
+    } else {
+      medoc.createdAt = Utils.today();
     }
     await DB.put('medocs', medoc);
     Utils.closeModals();
