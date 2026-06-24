@@ -286,9 +286,28 @@ const Notifs = (() => {
     };
   }
 
+  // ── Sauvegarde la subscription push dans Firestore ──────────
+  async function savePushSubscription() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: 'BGCaqieB9oadheH18FRWLinqEndmI7rPTbJTrA8FR3urdyAdVa9AEc3syh_OHV2iUIddHn0Ko67KkDIwTALXaYM',
+        });
+      }
+      await DB.setSetting('push_subscription', sub.toJSON());
+    } catch(e) { console.warn('Push subscription failed:', e); }
+  }
+
   // ── Main schedule function — appelé à chaque ouverture de l'app ───
   async function scheduleAll() {
     if (!hasPermission()) return;
+
+    // Sauvegarde la subscription push pour le Worker Cloudflare
+    await savePushSubscription();
 
     // Annuler les notifs programmées existantes
     try {
